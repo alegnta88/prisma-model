@@ -1,0 +1,153 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  user
+  admin
+  customer
+}
+
+enum CustomerRole {
+  customer
+}
+
+enum ProductStatus {
+  pending
+  approved
+  rejected
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  failed
+}
+
+enum OrderStatus {
+  pending
+  processing
+  shipped
+  delivered
+  cancelled
+}
+
+model User {
+  id                Int       @id @default(autoincrement())
+  name              String
+  phone             String
+  email             String    @unique
+  password          String
+  cartData          Json?
+  otp               String?
+  isVerified        Boolean   @default(false)
+  role              UserRole  @default(user)
+  permissions       String[]  @default([])
+  customPermissions String[]  @default([])
+  isActive          Boolean   @default(true)
+  orders            Order[]
+  products          Product[]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model Customer {
+  id                   Int          @id @default(autoincrement())
+  name                 String
+  phone                String
+  email                String       @unique
+  password             String
+  isVerified           Boolean      @default(false)
+  role                 CustomerRole @default(customer)
+  isActive             Boolean      @default(true)
+  cartData             Json         @default("{}")
+  twoFactorEnabled     Boolean      @default(false)
+  resetPasswordOTP     String?
+  resetPasswordExpires DateTime?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+}
+
+model Role {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  description String?
+  permissions String[]  @default([])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Category {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  description String?
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Product {
+  id          Int           @id @default(autoincrement())
+  name        String
+  price       Float
+  description String
+  image       String[]
+  categoryId  Int
+  category    Category      @relation(fields: [categoryId], references: [id])
+  subcategory String?
+  sizes       String[]      @default([])
+  bestseller  Boolean       @default(false)
+  status      ProductStatus @default(pending)
+  addedById   Int?
+  addedBy     User?         @relation(fields: [addedById], references: [id])
+  stock       Int           @default(0)
+  orderItems  OrderItem[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Payment {
+  id         Int           @id @default(autoincrement())
+  tx_ref     String        @unique
+  reference  String
+  status     PaymentStatus
+  amount     Float
+  charge     Float?
+  currency   String        @default("ETB")
+  email      String
+  first_name String?
+  last_name  String?
+  method     String?
+  mode       String?
+  type       String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+}
+
+model Order {
+  id              Int           @id @default(autoincrement())
+  customerId      Int
+  customer        User          @relation(fields: [customerId], references: [id])
+  items           OrderItem[]
+  totalAmount     Float
+  shippingAddress Json
+  paymentStatus   PaymentStatus @default(pending)
+  orderStatus     OrderStatus   @default(pending)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model OrderItem {
+  id        Int      @id @default(autoincrement())
+  orderId   Int
+  order     Order    @relation(fields: [orderId], references: [id])
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id])
+  quantity  Int
+  price     Float
+}

@@ -13,7 +13,11 @@ import customerRouter from './routes/customerRoute.js';
 import cartRouter from './routes/cartRoute.js';
 import categoryRouter from './routes/categoryRoute.js';
 import adminRouter from './routes/adminRoute.js';
+import { PrismaClient } from '@prisma/client'
 
+const prisma = new PrismaClient()
+
+export default prisma
 dotenv.config();
 
 const app = express();
