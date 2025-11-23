@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import connectToDatabase from './config/env.js';
+import { connectToDatabase } from './config/env.js';
 import { connectCloudinary } from './config/cloudinary.js';
 import userRouter from './routes/userRoute.js';
 import morgan from 'morgan';
