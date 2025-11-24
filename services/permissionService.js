@@ -1,21 +1,28 @@
-import UserModel from "../models/userModel.js";
+import { prisma } from "../config/prisma.js";
 import { rolePermissions } from "../utils/rolePermission.js";
 
 export const assignPermissionsService = async (userId, customPermissions = []) => {
-  const user = await UserModel.findById(userId);
+  const user = await prisma.user.findUnique({
+    where: { id: Number(userId) },
+  });
+
   if (!user) throw new Error("User not found");
 
   if (!Array.isArray(customPermissions)) {
     customPermissions = [customPermissions];
   }
 
-  const rolePerms = rolePermissions[user.role] || [];
-  const mergedPermissions = Array.from(new Set([...rolePerms, ...customPermissions]));
+  const baseRolePermissions = rolePermissions[user.role] || [];
 
-  user.permissions = mergedPermissions;
-  user.customPermissions = customPermissions;
+  const mergedPermissions = [...new Set([...baseRolePermissions, ...customPermissions])];
 
-  await user.save();
+  const updatedUser = await prisma.user.update({
+    where: { id: Number(userId) },
+    data: {
+      permissions: mergedPermissions,
+      customPermissions: customPermissions,
+    },
+  });
 
-  return user;
+  return updatedUser;
 };

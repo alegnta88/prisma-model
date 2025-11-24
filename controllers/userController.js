@@ -5,7 +5,7 @@ import {
   fetchUsersService
 } from '../services/userService.js';
 import { handleLogin } from '../services/authService.js';
-import { createAdminOTPService, verifyAdminOTPService } from '../services/adminService.js'; // Prisma version
+import { createAdminOTPService, verifyAdminOTPService } from '../services/adminService.js';
 
 export const registerUserByAdmin = async (req, res) => {
   try {
