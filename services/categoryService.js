@@ -1,4 +1,4 @@
-import { prisma } from '../config/env.js';
+import { prisma } from '../config/prisma.js';
 
 export const createCategoryService = async (user, { name, description }) => {
   if (user.role !== 'admin') {
