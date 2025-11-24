@@ -4,7 +4,7 @@ import {
   getAllOrdersService,
   updateOrderStatusService,
 } from '../services/orderService.js';
-import { prisma } from '../config/env.js';
+import { prisma } from '../config/prisma.js';
 import logger from '../utils/logger.js';
 
 export const createOrder = async (req, res) => {

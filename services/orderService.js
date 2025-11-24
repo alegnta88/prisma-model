@@ -1,4 +1,4 @@
-import { prisma } from '../config/env.js';
+import { prisma } from '../config/prisma.js';
 import { sendSMS } from '../utils/sendSMS.js';
 
 export const createOrderService = async (customer, items, shippingAddress) => {
