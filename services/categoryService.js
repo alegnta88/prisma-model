@@ -1,24 +1,32 @@
-import CategoryModel from "../models/categoryModel.js";
+import { prisma } from '../config/env.js';
 
 export const createCategoryService = async (user, { name, description }) => {
-  if (user.role !== "admin") {
-    throw new Error("Only admin can create categories");
+  if (user.role !== 'admin') {
+    throw new Error('Only admin can create categories');
   }
 
-  const existing = await CategoryModel.findOne({ name: name.trim() });
-  if (existing) {
-    throw new Error("Category already exists");
-  }
-
-  const category = new CategoryModel({
-    name: name.trim(),
-    description,
+  const existing = await prisma.category.findUnique({
+    where: { name: name.trim() },
   });
 
-  await category.save();
+  if (existing) {
+    throw new Error('Category already exists');
+  }
+
+  const category = await prisma.category.create({
+    data: {
+      name: name.trim(),
+      description: description || '',
+    },
+  });
+
   return category;
 };
 
 export const getAllCategoriesService = async () => {
-  return await CategoryModel.find().sort({ createdAt: -1 });
+  const categories = await prisma.category.findMany({
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return categories;
 };
