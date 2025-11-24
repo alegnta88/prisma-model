@@ -4,14 +4,18 @@ import { uploadImage, deleteImage } from './cloudinaryService.js';
 export const createProduct = async (data, files, user) => {
   const { name, price, description, category, subcategory, sizes, bestseller, stock } = data;
 
-  if (!name || !price || !description || !category || !stock) {
+  if (!name || !price || !description || !category || stock == null) {
     throw new Error("Please provide all required fields.");
   }
 
   if (isNaN(price) || price <= 0) throw new Error("Invalid product price.");
-  if (stock != null && (isNaN(stock) || stock < 0)) throw new Error("Stock must be a non-negative number");
+  if (isNaN(stock) || stock < 0) throw new Error("Stock must be a non-negative number");
+  console.log("Category received:", category, "Type:", typeof category);
 
-  const categoryDoc = await prisma.category.findUnique({ where: { id: Number(category) } });
+  const categoryId = Number(category);
+  if (isNaN(categoryId)) throw new Error("Invalid category ID");
+
+  const categoryDoc = await prisma.category.findUnique({ where: { id: categoryId } });
   if (!categoryDoc) throw new Error("The selected category does not exist. Please choose a valid category.");
 
   const imageArray = [];
@@ -27,6 +31,7 @@ export const createProduct = async (data, files, user) => {
   if (sizes) {
     try {
       parsedSizes = typeof sizes === "string" ? JSON.parse(sizes) : sizes;
+      if (!Array.isArray(parsedSizes)) parsedSizes = [parsedSizes];
     } catch {
       parsedSizes = Array.isArray(sizes) ? sizes : [sizes];
     }
@@ -40,11 +45,11 @@ export const createProduct = async (data, files, user) => {
       price: Number(price),
       description: description.trim(),
       image: imageArray,
-      categoryId: Number(category),
+      categoryId,
       subcategory: subcategory?.trim() || "",
       sizes: parsedSizes,
-      bestseller: bestseller === "true" || bestseller === true,
-      stock: Number(stock) || 0,
+      bestseller: bestseller === true || bestseller === "true",
+      stock: Number(stock),
       status: productStatus,
       addedById: user?.id,
     },
@@ -79,13 +84,19 @@ export const getProducts = async (queryParams, user) => {
 };
 
 export const getProductById = async (id) => {
-  const product = await prisma.product.findUnique({ where: { id: Number(id) } });
+  const productId = Number(id);
+  if (isNaN(productId)) throw new Error("Invalid product ID");
+
+  const product = await prisma.product.findUnique({ where: { id: productId } });
   if (!product) throw new Error('Product not found');
   return product;
 };
 
 export const deleteProduct = async (id) => {
-  const product = await prisma.product.findUnique({ where: { id: Number(id) } });
+  const productId = Number(id);
+  if (isNaN(productId)) throw new Error("Invalid product ID");
+
+  const product = await prisma.product.findUnique({ where: { id: productId } });
   if (!product) throw new Error('Product not found');
 
   if (product.image?.length > 0) {
@@ -94,13 +105,16 @@ export const deleteProduct = async (id) => {
     }
   }
 
-  await prisma.product.delete({ where: { id: Number(id) } });
+  await prisma.product.delete({ where: { id: productId } });
   return true;
 };
 
 export const approveProductById = async (id) => {
+  const productId = Number(id);
+  if (isNaN(productId)) throw new Error("Invalid product ID");
+
   const product = await prisma.product.update({
-    where: { id: Number(id) },
+    where: { id: productId },
     data: { status: 'approved' },
   });
   if (!product) throw new Error('Product not found');
@@ -108,8 +122,11 @@ export const approveProductById = async (id) => {
 };
 
 export const rejectProductById = async (id) => {
+  const productId = Number(id);
+  if (isNaN(productId)) throw new Error("Invalid product ID");
+
   const product = await prisma.product.update({
-    where: { id: Number(id) },
+    where: { id: productId },
     data: { status: 'rejected' },
   });
   if (!product) throw new Error('Product not found');
@@ -117,10 +134,12 @@ export const rejectProductById = async (id) => {
 };
 
 export const updateStockById = async (id, stock) => {
+  const productId = Number(id);
+  if (isNaN(productId)) throw new Error("Invalid product ID");
   if (stock == null || stock < 0) throw new Error('Stock must be a non-negative number');
 
   const product = await prisma.product.update({
-    where: { id: Number(id) },
+    where: { id: productId },
     data: { stock: Number(stock) },
   });
 
