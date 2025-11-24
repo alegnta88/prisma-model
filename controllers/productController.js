@@ -4,7 +4,8 @@ import {
   deleteProduct, 
   getProductById, 
   approveProductById, 
-  rejectProductById 
+  rejectProductById,
+  updateStockById
 } from '../services/productService.js';
 import logger from "../utils/logger.js";
 
@@ -45,20 +46,9 @@ export const listProduct = async (req, res) => {
   }
 };
 
-export const removeProduct = async (req, res) => {
-  try {
-    const { id } = req.params;
-    await deleteProduct(id);
-    res.status(200).json({ success: true, message: 'Product removed successfully' });
-  } catch (error) {
-    logger.error("Error removing product: %o", error);
-    res.status(400).json({ success: false, message: error.message });
-  }
-};
-
 export const singleProduct = async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = Number(req.params.id);
     const product = await getProductById(id);
     res.status(200).json({ success: true, product });
   } catch (error) {
@@ -67,9 +57,21 @@ export const singleProduct = async (req, res) => {
   }
 };
 
+export const removeProduct = async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    await deleteProduct(id);
+    res.status(200).json({ success: true, message: 'Product removed successfully' });
+  } catch (error) {
+    logger.error("Error removing product: %o", error);
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 export const approveProduct = async (req, res) => {
   try {
-    const product = await approveProductById(req.params.id);
+    const id = Number(req.params.id);
+    const product = await approveProductById(id);
     res.status(200).json({
       success: true,
       message: 'Product approved successfully',
@@ -83,7 +85,8 @@ export const approveProduct = async (req, res) => {
 
 export const rejectProduct = async (req, res) => {
   try {
-    const product = await rejectProductById(req.params.id);
+    const id = Number(req.params.id);
+    const product = await rejectProductById(id);
     res.status(200).json({
       success: true,
       message: 'Product rejected successfully',
@@ -97,7 +100,7 @@ export const rejectProduct = async (req, res) => {
 
 export const updateStock = async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = Number(req.params.id);
     const { stock } = req.body;
 
     const product = await updateStockById(id, stock);

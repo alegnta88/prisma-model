@@ -1,12 +1,16 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import UserModel from '../models/userModel.js';
-import redisClient from '../config/redis.js'; 
-import { sendEmail } from '../utils/sendEmail.js'; 
-import { generateOTP } from '../utils/otpGenerator.js'; 
+import { PrismaClient } from '@prisma/client';
+import redisClient from '../config/redis.js';
+import { sendEmail } from '../utils/sendEmail.js';
+import { generateOTP } from '../utils/otpGenerator.js';
+
+const prisma = new PrismaClient();
 
 export const createAdminOTPService = async (email, password) => {
-  const admin = await UserModel.findOne({ email, role: 'admin' });
+  const admin = await prisma.user.findFirst({
+    where: { email, role: 'admin' },
+  });
   if (!admin) throw new Error('Admin not found');
 
   const isMatch = await bcrypt.compare(password, admin.password);
@@ -16,14 +20,11 @@ export const createAdminOTPService = async (email, password) => {
 
   await redisClient.setEx(`otp:admin-login:${email}`, 300, otp);
 
-const emailSent = await sendEmail(
-  email,
-  'Admin Login OTP',
-  `Hello ${admin.name},
-
-Your login verification code is ${otp}.
-The code will expire in 5 minutes.`
-);
+  const emailSent = await sendEmail(
+    email,
+    'Admin Login OTP',
+    `Hello ${admin.name},\n\nYour login verification code is ${otp}.\nThe code will expire in 5 minutes.`
+  );
 
   if (!emailSent) throw new Error('Failed to send OTP. Please try again.');
 
@@ -37,12 +38,14 @@ export const verifyAdminOTPService = async (email, otp) => {
 
   await redisClient.del(`otp:admin-login:${email}`);
 
-  const admin = await UserModel.findOne({ email, role: 'admin' });
+  const admin = await prisma.user.findFirst({
+    where: { email, role: 'admin' },
+  });
   if (!admin) throw new Error('Admin not found');
 
   const token = jwt.sign(
     {
-      id: admin._id,
+      id: admin.id,
       role: admin.role,
       email: admin.email,
       permissions: admin.permissions || [],
@@ -56,7 +59,7 @@ export const verifyAdminOTPService = async (email, otp) => {
     message: 'Admin logged in successfully.',
     token,
     user: {
-      id: admin._id,
+      id: admin.id,
       name: admin.name,
       email: admin.email,
       role: admin.role,

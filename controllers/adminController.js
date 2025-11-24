@@ -1,4 +1,4 @@
-import UserModel from "../models/userModel.js";
+import { prisma } from "../config/prisma.js"; 
 import { createAdminOTPService, verifyAdminOTPService } from "../services/adminService.js";
 
 export const assignRole = async (req, res) => {
@@ -12,9 +12,9 @@ export const assignRole = async (req, res) => {
     const allowedRoles = ["user", "admin", "customer"];
     if (!allowedRoles.includes(role)) {
       return res.status(400).json({ success: false, message: "Invalid role" });
-    } 
+    }
 
-    const existingUser = await UserModel.findById(id);
+    const existingUser = await prisma.user.findUnique({ where: { id: Number(id) } });
     if (!existingUser) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
@@ -26,23 +26,15 @@ export const assignRole = async (req, res) => {
       });
     }
 
-    existingUser.role = role;
-    await existingUser.save();
-
-    const safeUser = {
-      id: existingUser._id,
-      name: existingUser.name,
-      email: existingUser.email,
-      role: existingUser.role,
-      isActive: existingUser.isActive,
-      createdAt: existingUser.createdAt,
-      updatedAt: existingUser.updatedAt,
-    };
+    const updatedUser = await prisma.user.update({
+      where: { id: Number(id) },
+      data: { role }
+    });
 
     res.json({
       success: true,
       message: `Role updated successfully to ${role}`,
-      user: safeUser,
+      user: updatedUser
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -52,25 +44,31 @@ export const assignRole = async (req, res) => {
 export const getAllAdmins = async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 8;
-    const cursor = req.query.cursor;
+    const cursor = req.query.cursor ? { id: Number(req.query.cursor) } : undefined;
 
-    const query = { role: 'admin' };
-    if (cursor) query._id = { $gt: cursor };
-
-    const admins = await UserModel.find(query)
-      .select('-password')
-      .sort({ _id: -1 })
-      .limit(limit);
-
-    const nextCursor = admins.length ? admins[admins.length - 1]._id : null;
-
-    res.json({
-      success: true,
-      admins,
-      nextCursor
+    const admins = await prisma.user.findMany({
+      where: { role: "admin" },
+      take: limit,
+      skip: cursor ? 1 : 0,
+      cursor: cursor,
+      orderBy: { id: "desc" },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        customPermissions: true
+      }
     });
+
+    const nextCursor = admins.length ? admins[admins.length - 1].id : null;
+
+    res.json({ success: true, admins, nextCursor });
   } catch (error) {
-    console.error('Error fetching admins:', error);
+    console.error("Error fetching admins:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -83,26 +81,22 @@ export const assignPermissions = async (req, res) => {
       return res.status(403).json({ success: false, message: "Access denied. Admins only." });
     }
 
-    const user = await UserModel.findById(id);
+    const user = await prisma.user.findUnique({ where: { id: Number(id) } });
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    const existingPermissions = user.customPermissions || [];
-    const mergedPermissions = Array.from(new Set([...existingPermissions, ...customPermissions]));
+    const mergedPermissions = Array.from(new Set([...(user.customPermissions || []), ...customPermissions]));
 
-    user.customPermissions = mergedPermissions;
-    const updatedUser = await user.save();
+    const updatedUser = await prisma.user.update({
+      where: { id: Number(id) },
+      data: { customPermissions: mergedPermissions }
+    });
 
     res.json({
       success: true,
       message: "Permissions updated successfully",
-      user: {
-        id: updatedUser._id,
-        name: updatedUser.name,
-        role: updatedUser.role,
-        customPermissions: updatedUser.customPermissions,
-      },
+      user: updatedUser
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -112,28 +106,29 @@ export const assignPermissions = async (req, res) => {
 export const revokePermissions = async (req, res) => {
   try {
     const { id, revokePermissions } = req.body;
+
     if (req.user.role !== "admin") {
       return res.status(403).json({ success: false, message: "Access denied. Admins only." });
     }
-    const user = await UserModel.findById(id);
+
+    const user = await prisma.user.findUnique({ where: { id: Number(id) } });
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
     const updatedPermissions = (user.customPermissions || []).filter(
       perm => !revokePermissions.includes(perm)
-    ); 
-    user.customPermissions = updatedPermissions;
-    const updatedUser = await user.save();
+    );
+
+    const updatedUser = await prisma.user.update({
+      where: { id: Number(id) },
+      data: { customPermissions: updatedPermissions }
+    });
+
     res.json({
       success: true,
       message: "Permissions revoked successfully",
-      user: {
-        id: updatedUser._id,
-        name: updatedUser.name,
-        role: updatedUser.role,
-        customPermissions: updatedUser.customPermissions,
-      },
+      user: updatedUser
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -144,7 +139,6 @@ export const createAdminOTPController = async (req, res) => {
   try {
     const { email, password } = req.body;
     const result = await createAdminOTPService(email, password);
-    
     res.status(200).json(result);
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });

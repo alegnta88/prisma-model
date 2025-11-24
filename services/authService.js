@@ -1,9 +1,11 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import UserModel from '../models/userModel.js';
+import { prisma } from '../config/prisma.js';
 
 export const handleLogin = async ({ email, password }) => {
-  const user = await UserModel.findOne({ email });
+  const user = await prisma.user.findUnique({
+    where: { email },
+  });
 
   if (!user) throw new Error('User not found');
 
@@ -14,10 +16,10 @@ export const handleLogin = async ({ email, password }) => {
 
   const token = jwt.sign(
     {
-      id: user._id,
+      id: user.id,
       role: user.role,
       email: user.email,
-      permission: user.permissions
+      permissions: user.permissions || []
     },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '1h' }
@@ -28,7 +30,7 @@ export const handleLogin = async ({ email, password }) => {
     message: `Login successful as ${user.role}`,
     token,
     user: {
-      id: user._id,
+      id: user.id,
       name: user.name,
       email: user.email,
       role: user.role

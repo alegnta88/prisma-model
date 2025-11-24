@@ -1,18 +1,18 @@
-import { 
-  registerUserService,  
-  activateUserById, 
+import {
+  registerUserService,
+  activateUserById,
   deactivateUserById,
   fetchUsersService
 } from '../services/userService.js';
-import UserModel from '../models/userModel.js';
 import { handleLogin } from '../services/authService.js';
+import { createAdminOTPService, verifyAdminOTPService } from '../services/adminService.js'; // Prisma version
 
 export const registerUserByAdmin = async (req, res) => {
   try {
     const user = await registerUserService({ ...req.body, role: 'user' }, true);
     res.status(201).json({
       message: 'User registered successfully by admin.',
-      userId: user._id,
+      userId: user.id,
       role: user.role
     });
   } catch (error) {
@@ -22,7 +22,6 @@ export const registerUserByAdmin = async (req, res) => {
 
 export const getAllUsers = async (req, res) => {
   try {
-    
     const limit = parseInt(req.query.limit) || 10;
     const cursor = req.query.cursor;
 
@@ -41,7 +40,7 @@ export const getAllUsers = async (req, res) => {
 
 export const activateUser = async (req, res) => {
   try {
-    const user = await activateUserById(req.params.id);
+    const user = await activateUserById(Number(req.params.id));
     res.status(200).json({
       success: true,
       message: 'User activated successfully',
@@ -54,7 +53,7 @@ export const activateUser = async (req, res) => {
 
 export const deactivateUser = async (req, res) => {
   try {
-    const user = await deactivateUserById(req.params.id);
+    const user = await deactivateUserById(Number(req.params.id));
     res.status(200).json({
       success: true,
       message: 'User deactivated successfully',
@@ -76,12 +75,22 @@ export const loginController = async (req, res) => {
   }
 };
 
+export const createAdminOTP = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const result = await createAdminOTPService(email, password);
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 export const verifyAdminOTP = async (req, res) => {
   try {
-    const {email, otp} = req.body;
-    const result = await handleadminOTP
-    
+    const { email, otp } = req.body;
+    const result = await verifyAdminOTPService(email, otp);
+    res.status(200).json(result);
   } catch (error) {
-    
+    res.status(400).json({ success: false, message: error.message });
   }
-}
+};
