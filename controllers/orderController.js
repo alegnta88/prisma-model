@@ -1,18 +1,24 @@
-import { createOrderService, getOrdersByCustomerService, getAllOrdersService, updateOrderStatusService } from '../services/orderService.js';
-import CustomerModel from '../models/customerModel.js';
+import {
+  createOrderService,
+  getOrdersByCustomerService,
+  getAllOrdersService,
+  updateOrderStatusService,
+} from '../services/orderService.js';
+import { prisma } from '../config/env.js';
 import logger from '../utils/logger.js';
 
 export const createOrder = async (req, res) => {
   try {
     const customerId = req.user.id;
-    const customer = await CustomerModel.findById(customerId);
+    const customer = await prisma.customer.findUnique({ where: { id: customerId } });
     if (!customer) throw new Error('Customer not found');
+
     const order = await createOrderService(customer, req.body.items, req.body.shippingAddress);
 
-    res.status(201).json({ 
-      success: true, 
+    res.status(201).json({
+      success: true,
       message: 'Order placed successfully',
-      order 
+      order,
     });
   } catch (error) {
     logger.error("Error creating order: %o", error);
@@ -25,7 +31,7 @@ export const getMyOrders = async (req, res) => {
     const orders = await getOrdersByCustomerService(req.user.id);
     res.status(200).json({ success: true, orders });
   } catch (error) {
-    logger.error("Error creating order: %o", error);
+    logger.error("Error fetching customer orders: %o", error);
     res.status(400).json({ success: false, message: error.message });
   }
 };
@@ -35,7 +41,7 @@ export const getAllOrders = async (req, res) => {
     const orders = await getAllOrdersService();
     res.status(200).json({ success: true, orders });
   } catch (error) {
-    logger.error("Error creating order: %o", error);
+    logger.error("Error fetching all orders: %o", error);
     res.status(400).json({ success: false, message: error.message });
   }
 };
@@ -52,7 +58,7 @@ export const updateOrderStatus = async (req, res) => {
 
     res.status(200).json({ success: true, message: 'Order status updated', order });
   } catch (error) {
-    logger.error("Error creating order: %o", error);
+    logger.error("Error updating order status: %o", error);
     res.status(400).json({ success: false, message: error.message });
   }
 };
