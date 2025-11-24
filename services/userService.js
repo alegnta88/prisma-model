@@ -1,65 +1,106 @@
-import UserModel from '../models/userModel.js';
-import { hashPassword, comparePassword } from '../utils/password.js';
-import { generateToken } from '../utils/jwt.js';
-import { generateOTP } from '../utils/otpGenerator.js';
-import { sendEmail } from '../utils/sendEmail.js';
+import { PrismaClient } from '@prisma/client';
+import { hashPassword } from '../utils/password.js';
 import { sendSMS } from '../utils/sendSMS.js';
-import redisClient from '../config/redis.js';
+
+const prisma = new PrismaClient();
 
 export const registerUserService = async ({ name, email, phone, password }, isAdmin = false) => {
   if (!isAdmin) throw new Error('Only admin can create users');
 
-  const existingUser = await UserModel.findOne({ email });
+  const existingUser = await prisma.user.findUnique({
+    where: { email },
+  });
   if (existingUser) throw new Error('User already exists');
 
   const hashedPassword = await hashPassword(password);
 
-  const user = new UserModel({
-    name,
-    email,
-    phone,
-    password: hashedPassword,
-    role: 'user',
-    isVerified: true,
+  const user = await prisma.user.create({
+    data: {
+      name,
+      email,
+      phone,
+      password: hashedPassword,
+      role: 'user',
+      isVerified: true,
+      isActive: true,
+    },
   });
 
-  await user.save();
   const smsSent = await sendSMS(phone, `Dear ${name}, your user account has been created successfully by admin.`);
   if (!smsSent) throw new Error('Failed to send notification SMS. Please try again.');
 
   return user;
 };
 
+
 export const deactivateUserById = async (id) => {
-  const user = await UserModel.findById(id);
+  const user = await prisma.user.findUnique({ where: { id } });
+
   if (!user) throw new Error('User not found');
-  if (user.isActive = 'false' ) throw new Error('This account is already deactive');
+  if (!user.isActive) throw new Error('This account is already deactivated');
   if (user.role !== 'user') throw new Error('Cannot deactivate non-user account');
 
-  user.isActive = false;
-  await user.save();
-  return user;
+  const updatedUser = await prisma.user.update({
+    where: { id },
+    data: { isActive: false },
+  });
+
+  return updatedUser;
 };
 
 export const activateUserById = async (id) => {
-  const user = await UserModel.findById(id);
+  const user = await prisma.user.findUnique({ where: { id } });
+
   if (!user) throw new Error('User not found');
-  if (user.isActive = 'true') throw new Error ('This account is already Activated!')
+  if (user.isActive) throw new Error('This account is already activated!');
   if (user.role !== 'user') throw new Error('Cannot activate non-user account');
 
-  user.isActive = true;
-  await user.save();
-  return user;
+  const updatedUser = await prisma.user.update({
+    where: { id },
+    data: { isActive: true },
+  });
+
+  return updatedUser;
 };
 
 export const fetchUsersService = async (limit = 10, cursor = null) => {
-  const query = { role: 'user' };
-  if (cursor) query._id = { $gt: cursor };
+  let users;
 
-  const users = await UserModel.find(query)
-    .select('-password')
-    .sort({ _id: -1 })
-    .limit(limit);
-    const nextCursor = users.length ? users[users.length - 1]._id : null;
+  if (cursor) {
+    users = await prisma.user.findMany({
+      where: { role: 'user' },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip: 1, 
+      cursor: { id: cursor },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+    });
+  } else {
+    users = await prisma.user.findMany({
+      where: { role: 'user' },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+    });
+  }
+
+  const nextCursor = users.length ? users[users.length - 1].id : null;
+
   return { users, nextCursor };
 };
