@@ -1,67 +1,83 @@
-import OrderModel from '../models/orderModel.js';
-import ProductModel from '../models/productModel.js';
-import mongoose from 'mongoose';
+import { prisma } from '../config/env.js';
 import { sendSMS } from '../utils/sendSMS.js';
-import CustomerModel from '../models/customerModel.js';
 
 export const createOrderService = async (customer, items, shippingAddress) => {
   if (!items || items.length === 0) throw new Error("No items in the order");
 
-  const orderItems = [];
   let totalAmount = 0;
+  const orderItemsData = [];
 
   for (const item of items) {
-    if (!mongoose.Types.ObjectId.isValid(item.product)) {
-      throw new Error(`Invalid product ID ${item.product}`);
-    }
+    const product = await prisma.product.findUnique({
+      where: { id: item.productId },
+    });
 
-    const product = await ProductModel.findById(item.product);
-    if (!product) throw new Error(`Product not found: ${item.product}`);
+    if (!product) throw new Error(`Product not found: ${item.productId}`);
 
     const quantity = item.quantity || 1;
-
     if (product.stock < quantity) {
       throw new Error(`Insufficient stock for ${product.name}. Available: ${product.stock}`);
     }
-    
-    product.stock -= quantity;
-    await product.save();
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { stock: product.stock - quantity },
+    });
 
     totalAmount += product.price * quantity;
 
-    orderItems.push({
-      product: product._id,
+    orderItemsData.push({
+      productId: product.id,
       quantity,
       price: product.price,
     });
   }
 
-  const order = new OrderModel({
-    customer: customer._id,
-    items: orderItems,
-    totalAmount,
-    shippingAddress,
-    paymentStatus: "pending",
-    orderStatus: "pending",
+  const order = await prisma.order.create({
+    data: {
+      customerId: customer.id,
+      totalAmount,
+      shippingAddress,
+      paymentStatus: 'pending',
+      orderStatus: 'pending',
+      items: {
+        create: orderItemsData,
+      },
+    },
+    include: { items: true },
   });
 
-  await order.save();
   return order;
 };
 
-// let customer view their orders
 export const getOrdersByCustomerService = async (customerId) => {
-  return await OrderModel.find({ customer: customerId }).populate('items.product');
+  return await prisma.order.findMany({
+    where: { customerId },
+    include: {
+      items: {
+        include: { product: true },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
 };
 
 export const getAllOrdersService = async () => {
-  return await OrderModel.find()
-    .populate('customer', 'name email')
-    .populate('items.product');
+  return await prisma.order.findMany({
+    include: {
+      customer: { select: { id: true, name: true, email: true, phone: true } },
+      items: { include: { product: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
 };
 
 export const updateOrderStatusService = async (user, orderId, newStatus) => {
-  const order = await OrderModel.findById(orderId);
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { customer: true },
+  });
+
   if (!order) throw new Error('Order not found');
 
   if (user.role !== 'admin') {
@@ -72,33 +88,24 @@ export const updateOrderStatusService = async (user, orderId, newStatus) => {
     throw new Error(`Order is already in '${newStatus}' status`);
   }
 
-  const allowedTransitions = {
-    pending: ['processing'],
-    processing: ['shipped'],
-    shipped: [],
-    delivered: [],
-    cancelled: [],
-  };
-
-  const validStatuses = Object.keys(allowedTransitions);
-  if (!validStatuses.includes(newStatus)) {
+  const allowedStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
+  if (!allowedStatuses.includes(newStatus)) {
     throw new Error(`Invalid status: ${newStatus}`);
   }
 
-  if (user.role !== 'admin') {
-    if (!allowedTransitions[order.orderStatus].includes(newStatus)) {
-      throw new Error(`You cannot change status from ${order.orderStatus} to ${newStatus}`);
-    }
+  const updatedOrder = await prisma.order.update({
+    where: { id: orderId },
+    data: { orderStatus: newStatus },
+    include: { customer: true, items: { include: { product: true } } },
+  });
+
+  if (updatedOrder.customer?.phone) {
+    const smsSent = await sendSMS(
+      updatedOrder.customer.phone,
+      `Your order status has been updated to: ${newStatus}`
+    );
+    if (!smsSent) console.warn(`Failed to send SMS to ${updatedOrder.customer.phone}`);
   }
 
-  order.orderStatus = newStatus;
-  await order.save();
-
-  const customer = await CustomerModel.findById(order.customer);
-  if (customer?.phone) {
-    const smsSent = await sendSMS(customer.phone, `Your order status has been updated to: ${newStatus}`);
-    if (!smsSent) console.warn(`Failed to send SMS to ${customer.phone}`);
-  }
-
-  return order;
+  return updatedOrder;
 };
